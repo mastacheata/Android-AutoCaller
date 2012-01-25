@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AutoCaller</string>
+    <string name="intro">This application will now try to call a series of phone numbers. These numbers are read from the sdcard file /sdcard/Download/numbers.txt</string>
+    <string name="callbutton_text">Next call</string>
+
+</resources>

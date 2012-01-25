@@ -1,12 +1,19 @@
-package de.fhaachen.praxisprojekt;
+package com.android.forensicsgenerator.autocaller;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
+import de.fhaachen.praxisprojekt.R;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -15,9 +22,11 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.CallLog;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -39,14 +48,11 @@ public class AutoCallerActivity extends Activity {
 		setContentView(R.layout.main);
 		
 		callbutton = (Button) findViewById(R.id.callbutton);
-		callbutton.setOnClickListener(new View.OnClickListener() {
-			
+		callbutton.setOnClickListener(new View.OnClickListener() {			
 			public void onClick(View v) {
 				if (getNumbers() && (progress < numbersList.size())) {
-					callbutton.setEnabled(true);
 					call();
 				} else {
-					callbutton.setEnabled(false);
 					showDialog(DIALOG_RESET);
 				}
 			}
@@ -107,6 +113,36 @@ public class AutoCallerActivity extends Activity {
 		}
 	}
 	
+	private void saveCallLog() {
+        Cursor cur = AutoCallerActivity.this.managedQuery(CallLog.Calls.CONTENT_URI, null, null, null, android.provider.CallLog.Calls.DEFAULT_SORT_ORDER);
+        String outgoingNumber = "", duration = "";
+        Long dateTime;
+        
+        if (cur.moveToFirst()) {
+        	dateTime = cur.getLong(cur.getColumnIndex(CallLog.Calls.DATE));
+        	outgoingNumber = cur.getString(cur.getColumnIndex(CallLog.Calls.NUMBER));
+        	duration = cur.getString(cur.getColumnIndex(CallLog.Calls.DURATION));
+
+        	if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+				File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+				File logfile = new File(path, "call-log.txt");
+				try {
+					BufferedWriter bw = new BufferedWriter(new FileWriter(logfile.getAbsolutePath(), true));
+					DateFormat df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.GERMANY);
+					bw.write(df.format(new Date(dateTime))+" Outgoing call: "+outgoingNumber+" Duration: "+duration+"s");
+					bw.newLine();
+					bw.flush();
+					bw.close();
+				} catch (IOException e) {
+					Log.e(TAG, "Couldn't write log to External Storage");
+				}
+        	}
+        	cur.close();
+        } else {
+        	//TODO Handling problems with empty callLog
+        }
+	}
+	
 	@Override
 	public void finish() {
 		SharedPreferences settings = getPreferences(MODE_PRIVATE);
@@ -131,6 +167,7 @@ public class AutoCallerActivity extends Activity {
 			       })
 			       .setNegativeButton("End application", new DialogInterface.OnClickListener() {
 			           public void onClick(DialogInterface dialog, int id) {
+			        	   AutoCallerActivity.this.progress = 0;
 			        	   AutoCallerActivity.this.finish();
 			           }
 			       });
@@ -145,17 +182,14 @@ public class AutoCallerActivity extends Activity {
 		public void onCallStateChanged(int state, String incomingNumber) {
 	        if(TelephonyManager.CALL_STATE_OFFHOOK == state) {
 	        	callstarted = true;
-	            Log.i(TAG, "OFFHOOK, state: " + callstarted);
 	        }
 	        if(TelephonyManager.CALL_STATE_IDLE == state) {
-	        	Log.i(TAG, "IDLE, state " + callstarted);
 	        	if (callstarted == true) {
-	                Intent t = new Intent(AutoCallerActivity.this, AutoCallerActivity.class);
+	        		callstarted = false;
+	        		saveCallLog();
+	        		Intent t = new Intent(AutoCallerActivity.this, AutoCallerActivity.class);
 	                t.setAction(Intent.ACTION_MAIN);
-	                Log.i(TAG, "Going Back, state: " + callstarted);
-	                callstarted = false;
 	                startActivity(t);
-	                finish();
 	        	}
 	        }
 		}
